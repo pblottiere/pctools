@@ -63,8 +63,6 @@ import json
 class ExtentImport(QgsProcessingAlgorithm):
 
     INPUT = 'LAS'
-    OUTPUT_BASE = 'BASE'
-    OUTPUT_TABLE = 'TABLE'
     OUTPUT_LAYER = 'LAYER'
 
     def uri(self, db):
@@ -114,20 +112,7 @@ class ExtentImport(QgsProcessingAlgorithm):
 
         self.addParameter( lasParam )
 
-        # database
-        pgBaseParam = QgsProcessingParameterEnum( self.OUTPUT_BASE )
-        pgBaseParam.setDescription( self.tr( 'PgPointCloud database' ) )
-        pgBaseParam.setOptions( self.pgpointcloudDatabases() )
-
-        self.addParameter( pgBaseParam )
-
-        # table
-        pgTableParam = QgsProcessingParameterString( self.OUTPUT_TABLE )
-        pgTableParam.setDescription( self.tr( 'PgPointCloud table' ) )
-
-        self.addParameter( pgTableParam )
-
-        # table
+        # output layer
         layerParam = QgsProcessingParameterFeatureSink( self.OUTPUT_LAYER )
         layerParam.setDescription( self.tr( 'Vector layer' ) )
 
@@ -140,22 +125,15 @@ class ExtentImport(QgsProcessingAlgorithm):
 
         filenames = self.parameterAsString(parameters, self.INPUT, context)
 
-        dbindex = self.parameterAsEnum(parameters, self.OUTPUT_BASE, context)
-        db = self.pgpointcloudDatabases()[dbindex]
-
-        table = self.parameterAsString(parameters, self.OUTPUT_TABLE, context)
-
         crs = QgsCoordinateReferenceSystem.fromEpsgId(4326)
 
         fields = QgsFields()
         fields.append(QgsField("filename", QVariant.String))
-        fields.append(QgsField("db", QVariant.String))
-        fields.append(QgsField("table", QVariant.String))
         fields.append(QgsField("points", QVariant.Int))
 
         outputWkb = QgsWkbTypes.Polygon
-        (sink, dest_id) = self.parameterAsSink(parameters,
-                self.OUTPUT_LAYER, context, fields, outputWkb, crs )
+        (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT_LAYER,
+                                               context, fields, outputWkb, crs)
 
         total = 100 / len(filenames.split(";"))
         count = 0
@@ -163,11 +141,10 @@ class ExtentImport(QgsProcessingAlgorithm):
             if feedback.isCanceled():
                 break
 
-            feedback.setProgress( count * total )
+            feedback.setProgress(count * total)
             count += 1
 
-            QgsMessageLog.logMessage("FILENAME:::::::")
-            QgsMessageLog.logMessage(filename)
+            QgsMessageLog.logMessage("Filename:{}".format(filename))
 
             pipejson = """
             {{
@@ -191,14 +168,14 @@ class ExtentImport(QgsProcessingAlgorithm):
 
             extent = QgsRectangle(minx, miny, maxx, maxy)
             wkt = extent.asWktPolygon()
-            geom = QgsGeometry().fromWkt( wkt )
+            geom = QgsGeometry().fromWkt(wkt)
 
             f = QgsFeature()
-            f.setFields( QgsFields() )
-            f.setGeometry( geom )
-            f.setAttributes([filename, db, table, count])
+            f.setFields(QgsFields())
+            f.setGeometry(geom)
+            f.setAttributes([filename, count])
 
-            sink.addFeature( f, QgsFeatureSink.FastInsert )
+            sink.addFeature(f, QgsFeatureSink.FastInsert)
 
             #features = vlayer.getFeatures()
             #for current, inFeat in enumerate(features):
