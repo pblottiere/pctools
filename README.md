@@ -4,7 +4,7 @@
 
 ```
 $ mkdir -p $HOME/opt/pctools
-$ vitualenv -p /usr/bin/python3 $HOME/opt/pctools
+$ virtualenv --system-site-packages -p /usr/bin/python3 $HOME/opt/pctools
 ```
 
 ### LASzip
@@ -48,7 +48,7 @@ $ make install
 $ git clone https://github.com/PDAL/python PDAL_python
 $ cd PDAL_python
 $ source $USER/opt/pctools/bin/activate
-(pctools)$ pip intall numpy Cython packaging
+(pctools)$ pip intall Cython packaging
 (pctools)$ python setup.py install --root=/home/user/opt/ --prefix=pctools
 ```
 
@@ -66,3 +66,5 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> import pdal
 >>>
 ```
+
+Then, you should activate the PCTool virtualenv before running QGIS.
