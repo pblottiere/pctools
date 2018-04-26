@@ -68,3 +68,18 @@ Type "help", "copyright", "credits" or "license" for more information.
 ```
 
 Then, you should activate the PCTool virtualenv before running QGIS.
+
+## Create database
+
+```
+$ createdb pctools
+$ psql pctools
+pctools=# create extension postgis;
+CREATE EXTENSION
+pctools=# create extension pointcloud;
+CREATE EXTENSION
+pctools=# create extension pointcloud_postgis;
+CREATE EXTENSION
+```
+
+Then init Postgis connection with `pctools` database in QGIS.
