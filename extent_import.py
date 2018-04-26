@@ -32,10 +32,14 @@ __revision__ = '$Format:%H$'
 
 from PyQt5.QtCore import QCoreApplication
 
+from qgis.PyQt.QtCore import QVariant
+
 from qgis.core import (QgsProcessing,
                        QgsVectorLayer,
+                       QgsCoordinateReferenceSystem,
                        QgsProject,
                        QgsFields,
+                       QgsField,
                        QgsFeature,
                        QgsWkbTypes,
                        QgsGeometry,
@@ -56,7 +60,7 @@ import pdal
 import json
 
 
-class PgPointCloudImport(QgsProcessingAlgorithm):
+class ExtentImport(QgsProcessingAlgorithm):
 
     INPUT = 'LAS'
     OUTPUT_BASE = 'BASE'
@@ -138,12 +142,21 @@ class PgPointCloudImport(QgsProcessingAlgorithm):
 
         dbindex = self.parameterAsEnum(parameters, self.OUTPUT_BASE, context)
         db = self.pgpointcloudDatabases()[dbindex]
-        uri = self.uri(db)
 
         table = self.parameterAsString(parameters, self.OUTPUT_TABLE, context)
 
-        sink = None
-        dest_id = None
+        crs = QgsCoordinateReferenceSystem.fromEpsgId(4326)
+
+        fields = QgsFields()
+        fields.append(QgsField("filename", QVariant.String))
+        fields.append(QgsField("db", QVariant.String))
+        fields.append(QgsField("table", QVariant.String))
+        fields.append(QgsField("points", QVariant.Int))
+
+        outputWkb = QgsWkbTypes.Polygon
+        (sink, dest_id) = self.parameterAsSink(parameters,
+                self.OUTPUT_LAYER, context, fields, outputWkb, crs )
+
         total = 100 / len(filenames.split(";"))
         count = 0
         for filename in filenames.split(";"):
@@ -159,25 +172,10 @@ class PgPointCloudImport(QgsProcessingAlgorithm):
             pipejson = """
             {{
                 \"pipeline\":[
-                    {{
-                        \"type\":\"readers.las\",
-                        \"filename\": \"{}\"
-                    }},
-                    {{
-                        \"type\":\"filters.chipper\",
-                        \"capacity\":400
-                    }},
-                    {{
-                        \"type\":\"writers.pgpointcloud\",
-                        \"connection\":\"host={} port={} dbname={} user={} password={}\",
-                        \"table\":\"{}\",
-                        \"compression\":\"las\",
-                        \"overwrite\":\"true\"
-                    }}
+                    \"{}\"
                 ]
             }}
-            """.format(filename, uri.host(), uri.port(), uri.database(),
-                       uri.username(),uri.password(), table)
+            """.format(filename)
 
             pipeline = pdal.Pipeline(pipejson)
             pipeline.validate()
@@ -189,16 +187,7 @@ class PgPointCloudImport(QgsProcessingAlgorithm):
             maxx = meta["metadata"]["readers.las"][0]['maxx']
             miny = meta["metadata"]["readers.las"][0]['miny']
             maxy = meta["metadata"]["readers.las"][0]['maxy']
-
-            if not sink:
-                uri.setDataSource("public", table, "pa", "", "id")
-                vlayer = QgsVectorLayer(uri.uri(), table, "postgres")
-
-                fields = QgsFields()
-                outputWkb = QgsWkbTypes.Polygon
-                (sink, dest_id) = self.parameterAsSink(parameters,
-                        self.OUTPUT_LAYER, context, fields, outputWkb,
-                        vlayer.crs() )
+            count = meta["metadata"]["readers.las"][0]['count']
 
             extent = QgsRectangle(minx, miny, maxx, maxy)
             wkt = extent.asWktPolygon()
@@ -207,6 +196,7 @@ class PgPointCloudImport(QgsProcessingAlgorithm):
             f = QgsFeature()
             f.setFields( QgsFields() )
             f.setGeometry( geom )
+            f.setAttributes([filename, db, table, count])
 
             sink.addFeature( f, QgsFeatureSink.FastInsert )
 
@@ -217,7 +207,7 @@ class PgPointCloudImport(QgsProcessingAlgorithm):
         return {self.OUTPUT_LAYER: dest_id}
 
     def name(self):
-        return 'LAS to PGPointCloud'
+        return 'LAS/LAZ to extents'
 
     def displayName(self):
         return self.tr(self.name())
@@ -232,4 +222,4 @@ class PgPointCloudImport(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
-        return PgPointCloudImport()
+        return ExtentImport()

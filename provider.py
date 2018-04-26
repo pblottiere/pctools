@@ -32,6 +32,7 @@ __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
 from .pgpointcloud_import import PgPointCloudImport
+from .extent_import import ExtentImport
 
 
 class Provider(QgsProcessingProvider):
@@ -40,7 +41,7 @@ class Provider(QgsProcessingProvider):
         QgsProcessingProvider.__init__(self)
 
         # Load algorithms
-        self.alglist = [PgPointCloudImport()]
+        self.alglist = [PgPointCloudImport(), ExtentImport()]
 
     def unload(self):
         pass
