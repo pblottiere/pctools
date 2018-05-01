@@ -34,25 +34,18 @@ from PyQt5.QtCore import QCoreApplication
 
 from qgis.PyQt.QtCore import QVariant
 
-from qgis.core import (QgsProcessing,
-                       QgsVectorLayer,
-                       QgsCoordinateReferenceSystem,
-                       QgsProject,
+from qgis.core import (QgsCoordinateReferenceSystem,
                        QgsFields,
+                       Qgis,
                        QgsField,
                        QgsFeature,
                        QgsWkbTypes,
                        QgsGeometry,
                        QgsRectangle,
-                       QgsDataSourceUri,
-                       QgsSettings,
                        QgsMessageLog,
                        QgsFeatureSink,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFile,
-                       QgsProcessingParameterEnum,
-                       QgsProcessingParameterString,
-                       QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink)
 
 import psycopg2
@@ -65,59 +58,20 @@ class ExtentImport(QgsProcessingAlgorithm):
     INPUT = 'LAS'
     OUTPUT_LAYER = 'LAYER'
 
-    def uri(self, db):
-        s = QgsSettings()
-        s.beginGroup('PostgreSQL/connections/{}/'.format(db))
-
-        host = s.value( 'host' )
-        port = s.value( 'port' )
-        user = s.value( 'username' )
-        pwd = s.value( 'password' )
-
-        uri = QgsDataSourceUri()
-        uri.setConnection(str(host), str(port), str(db), str(user), str(pwd))
-
-        return uri
-
-    def pgpointcloudDatabases(self):
-        s = QgsSettings()
-        s.beginGroup('PostgreSQL/connections')
-
-        dbs = s.childGroups()
-        pcdbs = []
-        for db in dbs:
-            uri = self.uri( db )
-
-            try:
-                conn = psycopg2.connect(uri.connectionInfo(True))
-                cur = conn.cursor()
-                cur.execute('select * from pg_extension where extname=\'pointcloud\';')
-                if cur.fetchall():
-                    cur.close()
-                    pcdbs.append( db )
-
-            except psycopg2.OperationalError as e:
-                msg = 'Connection failed for {} ({})'.format(db, str(e))
-                QgsMessageLog.logMessage(msg)
-                continue
-
-        return pcdbs
-
     def initAlgorithm(self, config):
 
         # las file
-        lasParam = QgsProcessingParameterFile( self.INPUT )
-        lasParam.setDescription( self.tr( 'LAS file' ) )
-        #lasParam.setExtension( 'las' )
+        lasParam = QgsProcessingParameterFile(self.INPUT)
+        lasParam.setDescription(self.tr('LAS file'))
+        # lasParam.setExtension( 'las' )
 
-        self.addParameter( lasParam )
+        self.addParameter(lasParam)
 
         # output layer
-        layerParam = QgsProcessingParameterFeatureSink( self.OUTPUT_LAYER )
-        layerParam.setDescription( self.tr( 'Vector layer' ) )
+        layerParam = QgsProcessingParameterFeatureSink(self.OUTPUT_LAYER)
+        layerParam.setDescription(self.tr('Vector layer'))
 
-        self.addParameter( layerParam )
-
+        self.addParameter(layerParam)
 
     def processAlgorithm(self, parameters, context, feedback):
 
@@ -144,7 +98,7 @@ class ExtentImport(QgsProcessingAlgorithm):
             feedback.setProgress(count * total)
             count += 1
 
-            QgsMessageLog.logMessage("Filename:{}".format(filename))
+            self.debug("Filename: {}".format(filename))
 
             pipejson = """
             {{
@@ -156,7 +110,7 @@ class ExtentImport(QgsProcessingAlgorithm):
 
             pipeline = pdal.Pipeline(pipejson)
             pipeline.validate()
-            pipeline.loglevel = 4
+            # pipeline.loglevel = 4
             pipeline.execute()
 
             meta = json.loads(pipeline.get_metadata())
@@ -165,6 +119,8 @@ class ExtentImport(QgsProcessingAlgorithm):
             miny = meta["metadata"]["readers.las"][0]['miny']
             maxy = meta["metadata"]["readers.las"][0]['maxy']
             count = meta["metadata"]["readers.las"][0]['count']
+
+            self.debug(json.dumps(meta))
 
             extent = QgsRectangle(minx, miny, maxx, maxy)
             wkt = extent.asWktPolygon()
@@ -177,8 +133,8 @@ class ExtentImport(QgsProcessingAlgorithm):
 
             sink.addFeature(f, QgsFeatureSink.FastInsert)
 
-            #features = vlayer.getFeatures()
-            #for current, inFeat in enumerate(features):
+            # features = vlayer.getFeatures()
+            # for current, inFeat in enumerate(features):
             #    sink.addFeature(inFeat, QgsFeatureSink.FastInsert)
 
         return {self.OUTPUT_LAYER: dest_id}
@@ -200,3 +156,6 @@ class ExtentImport(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return ExtentImport()
+
+    def debug(self, msg):
+        QgsMessageLog.logMessage(msg, 'pctools', Qgis.Info)
